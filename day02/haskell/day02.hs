@@ -1,59 +1,52 @@
-import Text.ParserCombinators.ReadP
-import Data.Char (isDigit)
 import Control.Applicative ((<$>), (<|>))
-import Control.Arrow
+import Control.Arrow ((>>>), (&&&))
+import Control.Monad (void)
+import Data.Char (isDigit, isLetter)
+import Data.Function (on)
 import Data.List (sort, groupBy)
+import Text.ParserCombinators.ReadP
 
-data Cube = Red Int
-          | Green Int
-          | Blue Int
-  deriving (Show, Eq, Ord)
+data Game = Game { gameId :: Int
+                 , gameTakes :: [[(String, Int)]]
+                 }
 
 main :: IO ()
 main = interact $ parse >>> part1 &&& part2 >>> present
 
-parse :: String -> [(Int, [[Cube]])]
+parse :: String -> [Game]
 parse = fst . head . filter (null . snd) . readP_to_S games
   where
-    games = game `sepBy` eol <* optional (char '\n')
+    games = game `sepBy` newline <* optional (newline *> eof)
     game = do
-      game <- string "Game " *> number <* string ": "
-      cs <- cubes `sepBy` string "; "
-      return (game, cs)
+      gameId <- string "Game " *> number <* string ": "
+      gameTakes <- takes `sepBy` string "; "
+      return $ Game gameId gameTakes
 
-    cubes = cube `sepBy` string ", "
-    cube = red <|> green <|> blue
-
-    red = Red <$> number <* string " red"
-    green = Green <$> number <* string " green"
-    blue = Blue <$> number <* string " blue"
+    takes = colorCount `sepBy` string ", "
+    colorCount = do
+      n <- number
+      char ' '
+      color <- word
+      return (color, n)
 
     number = read <$> munch1 isDigit
-    eol = choice [ eof, char '\n' >> return () ]
+    word = munch1 isLetter
+    newline = char '\n'
 
-part1 :: [(Int, [[Cube]])] -> Int
-part1 = sum . map fst . filter possible
+part1 :: [Game] -> Int
+part1 = sum . map gameId . filter isPossibleGame
   where
-    possible = null . filter isImpossible . concat . snd
-    isImpossible (Red n)   = n > 12
-    isImpossible (Green n) = n > 13
-    isImpossible (Blue n)  = n > 14
+    isPossibleGame = null . filter isImpossibleTake . concat . gameTakes
+    isImpossibleTake ("red",   n) = n > 12
+    isImpossibleTake ("green", n) = n > 13
+    isImpossibleTake ("blue",  n) = n > 14
+    isImpossibleTake _            = undefined
 
-part2 :: [(Int, [[Cube]])] -> Int
-part2 = sum . map power . map smallestPossible
+part2 :: [Game] -> Int
+part2 = sum . map power . map fewestCubes
   where
-    smallestPossible = map last . groupBy matchingColor . sort . concat . snd
-    
-    matchingColor (Red _)   (Red _)   = True
-    matchingColor (Green _) (Green _) = True
-    matchingColor (Blue _)  (Blue _)  = True
-    matchingColor _         _         = False
-    
-    power = product . map colorValue
-    
-    colorValue (Red n)   = n
-    colorValue (Green n) = n
-    colorValue (Blue n)  = n
+    fewestCubes = map last . groupBy ((==) `on` fst) . sort . concat . gameTakes
+    power = product . map snd
 
 present :: (Show a, Show b) => (a, b) -> String
 present (a, b) = unlines [ "First answer: " ++ show a
