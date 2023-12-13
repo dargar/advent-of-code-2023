@@ -12,25 +12,22 @@ solve :: Int -> [String] -> Int
 solve n =
   sum . map (uncurry (+) . (solve' id transpose &&& solve' (* 100) id) . lines)
   where
-    solve' f g = f
-               . (\(xs, ys) -> if null ys then 0 else 1 + length xs)
-               . span (/= n)
-               . mirrorDiffs
-               . g
+    solve' f g = f . reflectionValue . span (/= n) . mirrorDiffs . g
+    reflectionValue (_, []) = 0
+    reflectionValue (xs, _) = 1 + length xs
 
 mirrorDiffs :: [String] -> [Int]
-mirrorDiffs (x:xs) = mirrorDiffs' [x] xs
+mirrorDiffs = uncurry mirrorDiffs' . (take 1 &&& drop 1)
   where
     mirrorDiffs' xs [] = []
     mirrorDiffs' xs ys =
       (sum $ zipWith countDiffs xs ys) : mirrorDiffs' (head ys : xs) (tail ys) 
 
-    countDiffs :: Eq a => [a] -> [a] -> Int
-    countDiffs = (length . filter (not . id)) .: zipWith (==)
-
-    (.:) = (.) . (.)
+    countDiffs = length . filter (not . id) .: zipWith (==)
 
 present :: (Show a, Show b) => (a, b) -> String
 present (a, b) = unlines [ "First answer: " ++ show a
                          , "Second answer: " ++ show b ]
 
+(.:) = (.) . (.)
+infixr 8 .:
